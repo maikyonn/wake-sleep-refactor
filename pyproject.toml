@@ -1,0 +1,11 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "staria"
+version = "0.1.0"
+
+[tool.setuptools]
+packages = ["src"]

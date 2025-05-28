@@ -1,0 +1,205 @@
+# Staria Music Generation Project - Git Ignore File
+
+# ==============================================================================
+# Existing Exclusions (Enhanced)
+# ==============================================================================
+./wandb
+./wandb-cache
+./wandb-local
+./checkpoints
+./combined_results
+./base-weights
+./wake-sleep-env
+./test_results
+./slurm_logs
+./temp_sbatch_scripts
+./generation_outputs
+./datasets
+./cache
+
+# Additional wandb patterns
+wandb/
+**/wandb/
+
+# ==============================================================================
+# Data Files and Datasets
+# ==============================================================================
+# MIDI files and music data
+*.mid
+*.midi
+*.wav
+*.mp3
+*.flac
+*.aac
+
+# Dataset directories (additional patterns)
+data/
+*/data/
+**/data/
+
+# Generated samples and outputs
+generated_samples/
+generated_output.mid
+decoder_sample.mid
+original_decoder.mid
+sample_generation.mid
+*.mid.bak
+
+# Pickle files containing dataset paths
+*.pkl
+*.pickle
+
+# Exclude the entire cc/ directory (external project)
+cc/
+
+# ==============================================================================
+# Model Weights and Checkpoints
+# ==============================================================================
+# PyTorch Lightning checkpoints
+lightning_logs/
+*.ckpt
+*.pth
+*.pt
+
+# Model weights and safetensors
+*.safetensors
+models/*.pth
+models/*.ckpt
+
+# Final model outputs
+final.ckpt
+
+# ==============================================================================
+# Python and Development
+# ==============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+ws-env/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ==============================================================================
+# System and Environment Files
+# ==============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.nfs*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ==============================================================================
+# Temporary and Cache Files
+# ==============================================================================
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+.tmp/
+
+# Cache files
+.cache/
+*.cache
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# ==============================================================================
+# SLURM and Logging
+# ==============================================================================
+# SLURM output files
+*.out
+*.err
+
+# Logs
+logs/
+runs/
+tb_logs/
+
+# ==============================================================================
+# Project Specific
+# ==============================================================================
+# Large binary files that shouldn't be tracked
+9YZ-Q
+
+# Compressed archives
+*.zip
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.rar
+*.7z
+
+# Local configuration files
+.env
+.env.local
+config.local.py
+secrets.py
+
+# ==============================================================================
+# Keep Important Files (Exceptions)
+# ==============================================================================
+# Keep empty directories with .gitkeep
+!.gitkeep
+
+# Keep important config files
+!src/ariautils/config/config.json
+!pyproject.toml
+
+# Keep documentation
+!*.md
+!*.rst
+
+# Keep shell scripts
+!*.sh
+
+# Keep requirements files
+!requirements*.txt
+!cc/requirements.txt
