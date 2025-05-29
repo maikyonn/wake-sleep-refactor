@@ -2,8 +2,13 @@
 Music generation utilities and post-processing.
 """
 
-# Will be populated after moving existing generation modules
-# from .generators import StariaGenerator, DecoderOnlyGenerator
-# from .post_processing import combine_sequences_with_timing
+# Import after fixing import issues
+# from .fabric_generator import generate_from_batch, combine_sequences_with_timing
+# from .fabric_decoder import LitStaria, OnDemandMidiDataset
 
-__all__ = []
+__all__ = [
+    # "generate_from_batch",
+    # "combine_sequences_with_timing", 
+    # "LitStaria",
+    # "OnDemandMidiDataset"
+]

@@ -4,9 +4,19 @@ Model architectures for Staria music generation.
 
 from .tokenizer import MusicTokenizerWithStyle
 
-# Import models after restructure is complete
+# Import after fixing import issues
 # from .staria_model import StariaModel
-# from .decoder_model import DecoderLM
-# from .encoder_model import EncoderLM
+# from .legacy_models import DecoderLM, ContrastiveEncoderLM
+# from .aria_transformer import AriaTransformerModel
+# from .generator import GeneratorModule
+# from .snippet_encoder import SnippetModule
 
-__all__ = ["MusicTokenizerWithStyle"]
+__all__ = [
+    "MusicTokenizerWithStyle",
+    # "StariaModel",
+    # "DecoderLM", 
+    # "ContrastiveEncoderLM",
+    # "AriaTransformerModel",
+    # "GeneratorModule",
+    # "SnippetModule"
+]

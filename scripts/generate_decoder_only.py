@@ -20,7 +20,7 @@ from typing import List, Optional
 import torch
 import sys
 import os
-sys.path.append('.')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from staria.models.tokenizer import MusicTokenizerWithStyle
 from staria.baselines.decoder_only import DecoderOnlyBaseline

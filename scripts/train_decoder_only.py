@@ -31,7 +31,7 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 # Import from new structure
 import sys
 import os
-sys.path.append('.')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from staria.models.tokenizer import MusicTokenizerWithStyle
 from staria.baselines.decoder_only import DecoderOnlyBaseline, PromptedMIDIDataset
 

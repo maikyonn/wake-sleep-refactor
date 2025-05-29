@@ -69,7 +69,6 @@ class DecoderOnlyBaseline(pl.LightningModule):
                 attn_dropout=0.1,
                 ff_dropout=0.1,
                 cross_attend=False,  # Pure decoder, no cross-attention
-                causal=True,
             )
         )
         
