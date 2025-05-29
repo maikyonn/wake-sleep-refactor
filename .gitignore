@@ -33,9 +33,13 @@ wandb/
 *.aac
 
 # Dataset directories (additional patterns)
+# Exclude data directories but allow staria/data/ module
 data/
+datasets/
 */data/
 **/data/
+# Allow staria data module
+!staria/data/
 
 # Generated samples and outputs
 generated_samples/
