@@ -10,13 +10,15 @@
 ./combined_results
 ./base-weights
 ./wake-sleep-env
+wake-sleep-env
 ./test_results
 ./slurm_logs
+./logs
 ./temp_sbatch_scripts
 ./generation_outputs
 ./datasets
 ./cache
-
+./datasets
 # Additional wandb patterns
 wandb/
 **/wandb/

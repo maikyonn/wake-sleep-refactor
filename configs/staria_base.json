@@ -1,0 +1,49 @@
+{
+  "experiment_name": "staria_base",
+  "description": "Base configuration for Staria encoder-decoder model",
+  "data": {
+    "train_index": "cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_train.pkl",
+    "val_index": "cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_val.pkl",
+    "batch_size": 2,
+    "num_workers": 32,
+    "max_len": 4096
+  },
+  "model": {
+    "encoder_dim": 1536,
+    "encoder_depth": 6,
+    "encoder_heads": 8,
+    "decoder_dim": 1536,
+    "decoder_depth": 16,
+    "decoder_heads": 24,
+    "max_len": 4096,
+    "model_type": "staria"
+  },
+  "training": {
+    "lr": 3e-4,
+    "epochs": 100,
+    "accumulate_grad_batches": 4,
+    "gradient_clip_val": 1.0,
+    "gpus": -1,
+    "num_nodes": 1,
+    "strategy": "ddp",
+    "precision": "bf16-mixed",
+    "log_every_n_steps": 50,
+    "val_check_interval": 1.0,
+    "check_val_every_n_epoch": 1,
+    "enable_progress_bar": true
+  },
+  "logging": {
+    "project_name": "staria-experiments",
+    "run_name": null,
+    "log_dir": "logs/staria",
+    "use_wandb": true
+  },
+  "checkpoint": {
+    "checkpoint_dir": "checkpoints",
+    "save_top_k": 2,
+    "monitor": "val_loss",
+    "mode": "min",
+    "save_last": true,
+    "resume_from": null
+  }
+}

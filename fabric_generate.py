@@ -330,7 +330,7 @@ def generate_from_batch(model: LitStaria, batch: Dict[str, torch.Tensor],
 
 def parse_args():
     p = argparse.ArgumentParser(description="Generate music with trained Staria model")
-    p.add_argument("--checkpoint", required=True, help="Path to model checkpoint")
+    p.add_argument("--checkpoint", default='checkpoints/staria/last.ckpt', help="Path to model checkpoint")
     p.add_argument("--output_dir", default="generated_samples", help="Directory to save generated samples")
     p.add_argument("--max_new_tokens", type=int, default=4000, help="Max tokens to generate")
     p.add_argument("--temperature", type=float, default=0.9, help="Temperature for generation")
@@ -338,9 +338,9 @@ def parse_args():
     p.add_argument("--batch_size", type=int, default=2, help="Batch size for generation from data")
     
     # Data-based generation
-    p.add_argument("--data_index", help="Path to .pkl index file for data-based generation")
+    p.add_argument("--data_index", default='cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_val.pkl', help="Path to .pkl index file for data-based generation")
     p.add_argument("--use_snippet", action="store_true", default=True, help="Use snippet mode")
-    p.add_argument("--data_limit", type=int, help="Limit number of data samples to use")
+    p.add_argument("--data_limit", default=1,type=int, help="Limit number of data samples to use")
     
     return p.parse_args()
 

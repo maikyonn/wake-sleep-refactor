@@ -1,0 +1,48 @@
+{
+  "experiment_name": "midi_classifier",
+  "description": "MIDI style classifier model configuration",
+  "data": {
+    "train_index": "cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_train.pkl",
+    "val_index": "cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_val.pkl",
+    "batch_size": 16,
+    "num_workers": 8,
+    "max_len": 1024
+  },
+  "model": {
+    "hidden": 1024,
+    "layers": 12,
+    "heads": 16,
+    "n_classes": 4,
+    "dropout_rate": 0.1,
+    "max_len": 1024,
+    "model_type": "classifier"
+  },
+  "training": {
+    "lr": 5e-4,
+    "epochs": 20,
+    "accumulate_grad_batches": 1,
+    "gradient_clip_val": 1.0,
+    "gpus": -1,
+    "num_nodes": 1,
+    "strategy": "ddp",
+    "precision": "bf16-mixed",
+    "log_every_n_steps": 50,
+    "val_check_interval": 1.0,
+    "check_val_every_n_epoch": 1,
+    "enable_progress_bar": true
+  },
+  "logging": {
+    "project_name": "midi-classifier-experiments",
+    "run_name": null,
+    "log_dir": "logs/classifier",
+    "use_wandb": true
+  },
+  "checkpoint": {
+    "checkpoint_dir": "checkpoints",
+    "save_top_k": 2,
+    "monitor": "val_accuracy",
+    "mode": "max",
+    "save_last": true,
+    "resume_from": null
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "experiment_name": "decoder_baseline",
+  "description": "Decoder-only baseline model configuration",
+  "data": {
+    "train_index": "cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_train.pkl",
+    "val_index": "cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_val.pkl",
+    "batch_size": 4,
+    "num_workers": 8,
+    "max_len": 2048,
+    "snippet_length": 256,
+    "num_snippets": 2
+  },
+  "model": {
+    "decoder_dim": 1024,
+    "decoder_depth": 12,
+    "decoder_heads": 16,
+    "max_len": 2048,
+    "model_type": "decoder_only"
+  },
+  "training": {
+    "lr": 1e-3,
+    "epochs": 50,
+    "accumulate_grad_batches": 2,
+    "gradient_clip_val": 1.0,
+    "gpus": -1,
+    "num_nodes": 1,
+    "strategy": "ddp",
+    "precision": "bf16-mixed",
+    "log_every_n_steps": 50,
+    "val_check_interval": 1.0,
+    "check_val_every_n_epoch": 1,
+    "enable_progress_bar": true
+  },
+  "logging": {
+    "project_name": "decoder-baseline-experiments",
+    "run_name": null,
+    "log_dir": "logs/decoder_baseline",
+    "use_wandb": true
+  },
+  "checkpoint": {
+    "checkpoint_dir": "checkpoints",
+    "save_top_k": 2,
+    "monitor": "val_loss",
+    "mode": "min",
+    "save_last": true,
+    "resume_from": null
+  }
+}

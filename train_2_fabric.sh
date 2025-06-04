@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=wake_sleep_ddp
 #SBATCH -p sched_mit_psfc_gpu_r8      # queue / partition
-#SBATCH --nodes=4               # This needs to match Fabric(num_nodes=1)
+#SBATCH --nodes=5               # This needs to match Fabric(num_nodes=1)
 #SBATCH --ntasks-per-node=4     # This needs to match Fabric(devices=4)
 #SBATCH --gpus-per-node=4 
 #SBATCH --cpus-per-task=32
@@ -52,12 +52,13 @@ export PYTHONFAULTHANDLER=1
 # ──────────────────────────────────────────────────────────────
 # 3.  Launch one torchrun per node, one process per GPU
 # ──────────────────────────────────────────────────────────────
-srun python fabric_decoder.py \
-     --devices $SLURM_NTASKS_PER_NODE \
-     --num_nodes $SLURM_NNODES \
-     --train_index cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_train.pkl \
-     --val_index cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_val.pkl \
-     --checkpoint_dir checkpoints/staria \
-     --batch_size 2 \
-     --num_epochs 100 \
-     --resume_from_checkpoint checkpoints/staria/last.ckpt
+srun python fabric_xt_2.py \
+    --train_pkl_file cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_train.pkl \
+    --val_pkl_file cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_val.pkl \
+    --epochs 4 \
+    --lr 1e-4 \
+    --devices 4 \
+    --num_nodes $SLURM_NNODES \
+    --batch_size 1 \
+    --num_workers 4 \
+    --checkpoint_dir checkpoints/staria_xt_2
