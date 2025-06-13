@@ -7,6 +7,7 @@ Key features added:
 - **Stochastic Weight Averaging** (starting at epoch 10).
 - **ModelCheckpoint** keeps only the single best model (lowest `val_loss`) and the last checkpoint.
 - **DeviceStatsMonitor** logs real‑time GPU/CPU and memory stats to your loggers.
+- **Perplexity tracking** for both training and validation.
 
 The script no longer uses a manual Fabric training loop—everything is delegated to
 `lightning.Trainer`, which automatically invokes the callbacks.
@@ -31,9 +32,12 @@ from lightning.pytorch.callbacks import (
     ModelCheckpoint,
     StochasticWeightAveraging,
     TQDMProgressBar,
+    LearningRateMonitor,
+    Callback,
 )
 from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
 import argparse
+import numpy as np
 
 
 from src.StariaTokenizer import (
@@ -258,7 +262,33 @@ def midi_collate_mapstyle(batch: List[Optional[Dict[str, Any]]], tokenizer: Musi
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# LightningModule
+# Custom Callback for Advanced LR Scheduling with SWA
+# ──────────────────────────────────────────────────────────────────────────────
+class LRSchedulerWithSWACallback(Callback):
+    """Custom callback to coordinate LR scheduling with SWA."""
+    
+    def __init__(self, swa_start_epoch_ratio=0.75):
+        self.swa_start_epoch_ratio = swa_start_epoch_ratio
+        self.swa_started = False
+    
+    def on_train_epoch_start(self, trainer, pl_module):
+        # Check if SWA should start
+        current_epoch_ratio = trainer.current_epoch / trainer.max_epochs
+        
+        if current_epoch_ratio >= self.swa_start_epoch_ratio and not self.swa_started:
+            self.swa_started = True
+            logger.info(f"SWA period started at epoch {trainer.current_epoch}")
+            
+            # Log the transition
+            pl_module.log("swa_active", 1.0, on_epoch=True, logger=True)
+        
+        # Log current learning rate
+        current_lr = trainer.optimizers[0].param_groups[0]['lr']
+        pl_module.log("learning_rate_manual", current_lr, on_epoch=True, logger=True)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# LightningModule with Perplexity Support
 # ──────────────────────────────────────────────────────────────────────────────
 class LitXTransformer(L.LightningModule):
     def __init__(
@@ -273,6 +303,8 @@ class LitXTransformer(L.LightningModule):
         lr: float = 1e-3,
         attn_flash: bool = True,
         rotary_pos_emb: bool = True,
+        dropout: float = 0.2,
+        dec_cross_residual_attn: bool = False,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["tokenizer"])
@@ -293,7 +325,10 @@ class LitXTransformer(L.LightningModule):
             dec_max_seq_len=max_seq_len,
             tie_token_emb=True,
             attn_flash=attn_flash,
-            rotary_pos_emb=rotary_pos_emb
+            rotary_pos_emb=rotary_pos_emb,
+            dec_cross_residual_attn=dec_cross_residual_attn,
+            dec_attn_dropout=dropout,
+            dec_ff_dropout=dropout
         )
 
     def forward(self, encoder_ids, decoder_ids, mask=None):
@@ -309,7 +344,13 @@ class LitXTransformer(L.LightningModule):
         
         loss = self.model(encoder_ids, decoder_ids, mask=encoder_mask)
         
+        # Log loss
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        
+        # Calculate and log perplexity
+        perplexity = torch.exp(loss)
+        self.log("train_perplexity", perplexity, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -322,7 +363,13 @@ class LitXTransformer(L.LightningModule):
         
         loss = self.model(encoder_ids, decoder_ids, mask=encoder_mask)
         
+        # Log loss
         self.log("val_loss", loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        
+        # Calculate and log perplexity
+        perplexity = torch.exp(loss)
+        self.log("val_perplexity", perplexity, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        
         return loss
 
     def configure_optimizers(self):
@@ -332,23 +379,14 @@ class LitXTransformer(L.LightningModule):
             betas=(0.9, 0.95), 
             weight_decay=0.1
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, 
-            T_max=1000, 
-            eta_min=self.lr * 0.1
-        )
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step",
-            },
-        }
+        
+        # Return just the optimizer without any scheduler
+        return optimizer
 
 
-def custom_generate_argmax(model, encoder_ids, decoder_start, max_length=256, encoder_mask=None, use_tqdm=False, tokenizer=None):
+def custom_generate_top_p(model, encoder_ids, decoder_start, max_length=256, encoder_mask=None, use_tqdm=False, tokenizer=None, top_p=0.9, temperature=1.0):
     """
-    Custom generation function using argmax for token selection.
+    Custom generation function using top-p (nucleus) sampling for token selection.
     
     Args:
         model: The XTransformer model
@@ -358,6 +396,8 @@ def custom_generate_argmax(model, encoder_ids, decoder_start, max_length=256, en
         encoder_mask: Encoder attention mask [batch_size, enc_seq_len]
         use_tqdm: Whether to show progress bar during generation
         tokenizer: Tokenizer instance to get eos_id for early stopping
+        top_p: Nucleus sampling parameter (default: 0.9)
+        temperature: Temperature for softmax scaling (default: 1.0)
     
     Returns:
         Generated sequence [batch_size, generated_length]
@@ -392,8 +432,28 @@ def custom_generate_argmax(model, encoder_ids, decoder_start, max_length=256, en
                 # Get the logits for the last position
                 next_token_logits = logits[:, -1, :]  # [batch_size, vocab_size]
                 
-                # Use argmax to get the next token
-                next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)  # [batch_size, 1]
+                # Apply temperature scaling
+                if temperature != 1.0:
+                    next_token_logits = next_token_logits / temperature
+                
+                # Apply top-p (nucleus) sampling
+                sorted_logits, sorted_indices = torch.sort(next_token_logits, descending=True)
+                cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
+                
+                # Remove tokens with cumulative probability above the threshold
+                sorted_indices_to_remove = cumulative_probs > top_p
+                # Shift the indices to the right to keep also the first token above the threshold
+                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                sorted_indices_to_remove[..., 0] = 0
+                
+                # Create a mask for the original logits tensor and set filtered tokens to -inf
+                for batch_idx in range(batch_size):
+                    indices_to_remove = sorted_indices[batch_idx][sorted_indices_to_remove[batch_idx]]
+                    next_token_logits[batch_idx, indices_to_remove] = float('-inf')
+                
+                # Sample from the filtered distribution
+                probs = torch.softmax(next_token_logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)  # [batch_size, 1]
                 
                 # Append the new token to the sequence
                 decoder_ids = torch.cat([decoder_ids, next_token], dim=1)
@@ -402,8 +462,8 @@ def custom_generate_argmax(model, encoder_ids, decoder_start, max_length=256, en
                 if use_tqdm:
                     progress_bar.set_postfix({"current_length": decoder_ids.size(1)})
                 
-                # Stop if we generate an end token
-                if eos_id is not None and next_token.item() == eos_id:
+                # Stop if we generate an end token (check all samples in batch)
+                if eos_id is not None and torch.any(next_token == eos_id):
                     if use_tqdm:
                         progress_bar.set_description("Generation stopped - <E> token generated")
                         progress_bar.close()
@@ -440,7 +500,7 @@ def inference_on_sample(model, sample, tokenizer, max_length=4096, use_tqdm=Fals
         underlying_model = model.model if hasattr(model, 'model') else model
         
         # Use our custom generation function
-        generated = custom_generate_argmax(
+        generated = custom_generate_top_p(
             model=underlying_model,
             encoder_ids=encoder_ids,
             decoder_start=seq_out_start,
@@ -525,6 +585,12 @@ def parse_args():
     parser.add_argument("--resume_from_checkpoint", type=str, default=None, help="Path to checkpoint to resume from")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of dataloader workers")
     
+    # SWA arguments
+    parser.add_argument("--swa_start_ratio", type=float, default=0.75,
+                       help="Start SWA at this ratio of total epochs")
+    parser.add_argument("--swa_lr_ratio", type=float, default=0.05,
+                       help="SWA learning rate as ratio of base LR")
+    
     return parser.parse_args()
 
 
@@ -551,10 +617,10 @@ def main():
     logger.info(f"Training dataset: {len(train_dataloader.dataset)} samples")
     logger.info(f"Validation dataset: {len(val_dataloader.dataset)} samples")
     
-    # Create model
+    # Create model with fixed parameters
     model = LitXTransformer(
         tokenizer=tokenizer,
-        lr=args.lr
+        lr=args.lr,
     )
     
     logger.info(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
@@ -569,7 +635,7 @@ def main():
     # Setup callbacks
     callbacks = [
         TQDMProgressBar(refresh_rate=20),
-        StochasticWeightAveraging(swa_epoch_start=10, swa_lrs=args.lr * 0.1),
+        StochasticWeightAveraging(swa_epoch_start=10, swa_lrs=args.lr * args.swa_lr_ratio),
         ModelCheckpoint(
             dirpath=args.checkpoint_dir,
             filename="best-{epoch:03d}-{val_loss:.4f}",
@@ -580,6 +646,7 @@ def main():
             auto_insert_metric_name=False,
         ),
         DeviceStatsMonitor(),
+        LearningRateMonitor(logging_interval='step'),
     ]
     
     # Setup trainer
@@ -595,6 +662,7 @@ def main():
         logger=[tb_logger, wandb_logger],
         enable_progress_bar=True,
         log_every_n_steps=10,
+        accumulate_grad_batches=16,
     )
     
     # Train the model
@@ -610,7 +678,7 @@ def main():
     if trainer.checkpoint_callback.best_model_path:
         logger.info(f"Best checkpoint: {trainer.checkpoint_callback.best_model_path}")
     
-    # Perform post-training inference
+    # Perform post-training inference with perplexity analysis
     if len(train_dataloader.dataset) > 0:
         logger.info("Performing post-training inference on a sample...")
         
@@ -648,11 +716,31 @@ def main():
                 # Generate output
                 generated_tokens = inference_on_sample(best_model, sample, tokenizer, max_length=1024, use_tqdm=True)
                 
+                # Calculate perplexity on the sample
+                with torch.no_grad():
+                    batch = {
+                        'encoder_ids': sample['encoder_ids'].unsqueeze(0).to(device),
+                        'decoder_ids': sample['decoder_ids'].unsqueeze(0).to(device),
+                        'encoder_mask': sample['encoder_mask'].unsqueeze(0).to(device),
+                        'decoder_mask': sample['decoder_mask'].unsqueeze(0).to(device)
+                    }
+                    
+                    loss = best_model.validation_step(batch, 0)
+                    if loss is not None:
+                        sample_perplexity = torch.exp(loss).item()
+                    else:
+                        sample_perplexity = float('nan')
+                
                 # Save results to file
                 results_file = "post_training_inference_results.txt"
                 with open(results_file, 'w') as f:
-                    f.write("POST-TRAINING INFERENCE RESULTS (Lightning Trainer)\n")
-                    f.write("=" * 50 + "\n\n")
+                    f.write("POST-TRAINING INFERENCE RESULTS (Lightning Trainer with Perplexity)\n")
+                    f.write("=" * 60 + "\n\n")
+                    
+                    f.write("SAMPLE PERPLEXITY:\n")
+                    f.write("-" * 20 + "\n")
+                    f.write(f"Loss: {loss.item() if loss is not None else 'N/A':.4f}\n")
+                    f.write(f"Perplexity: {sample_perplexity:.2f}\n\n")
                     
                     f.write("ENCODER TOKENS (INPUT):\n")
                     f.write("-" * 25 + "\n")
@@ -688,9 +776,22 @@ def main():
                     if generated_tokens:
                         generated_ids = tokenizer.encode(generated_tokens)
                         f.write(f"Generated IDs: {generated_ids[:50]}{'...' if len(generated_ids) > 50 else ''}\n")
+                    
+                    f.write("\n" + "=" * 60 + "\n")
+                    f.write("PERPLEXITY INTERPRETATION:\n")
+                    f.write("-" * 25 + "\n")
+                    if sample_perplexity < 10:
+                        f.write(f"Perplexity {sample_perplexity:.2f}: Model is very confident (strong patterns)\n")
+                    elif sample_perplexity < 30:
+                        f.write(f"Perplexity {sample_perplexity:.2f}: Model has normal confidence (typical musical flow)\n")
+                    elif sample_perplexity < 100:
+                        f.write(f"Perplexity {sample_perplexity:.2f}: Model is somewhat uncertain (complex/transitional section)\n")
+                    else:
+                        f.write(f"Perplexity {sample_perplexity:.2f}: Model is very uncertain (struggling with prediction)\n")
                 
                 logger.info(f"Inference results saved to: {results_file}")
                 logger.info(f"Generated {len(generated_tokens) if generated_tokens else 0} tokens")
+                logger.info(f"Sample perplexity: {sample_perplexity:.2f}")
                 
                 if generated_tokens and target_tokens:
                     match_count = sum(1 for g, t in zip(generated_tokens, target_tokens) if g == t)
@@ -701,8 +802,8 @@ def main():
                 logger.error(f"Error during post-training inference: {e}")
                 # Save error to file
                 with open("post_training_inference_results.txt", 'w') as f:
-                    f.write("POST-TRAINING INFERENCE RESULTS (Lightning Trainer)\n")
-                    f.write("=" * 50 + "\n\n")
+                    f.write("POST-TRAINING INFERENCE RESULTS (Lightning Trainer with Perplexity)\n")
+                    f.write("=" * 60 + "\n\n")
                     f.write(f"ERROR DURING INFERENCE: {str(e)}\n")
         else:
             logger.warning("No valid sample found for post-training inference")

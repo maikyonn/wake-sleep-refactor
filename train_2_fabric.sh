@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=wake_sleep_ddp
 #SBATCH -p sched_mit_psfc_gpu_r8      # queue / partition
-#SBATCH --nodes=5               # This needs to match Fabric(num_nodes=1)
+#SBATCH --nodes=4               # This needs to match Fabric(num_nodes=1)
 #SBATCH --ntasks-per-node=4     # This needs to match Fabric(devices=4)
 #SBATCH --gpus-per-node=4 
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=256GB
-#SBATCH --time=06:00:00
+#SBATCH --time=08:00:00
 #SBATCH --output=slurm_logs/%x-%j.out
 #SBATCH --nodelist=node[2100-2110]
 
@@ -55,10 +55,11 @@ export PYTHONFAULTHANDLER=1
 srun python fabric_xt_2.py \
     --train_pkl_file cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_train.pkl \
     --val_pkl_file cache/dataset_paths_synthetic_aria-midi-v1-pruned-ext-200k-struct_limitNone_7b76cfca_val.pkl \
-    --epochs 4 \
-    --lr 1e-4 \
+    --epochs 20 \
+    --lr 3e-5 \
     --devices 4 \
     --num_nodes $SLURM_NNODES \
     --batch_size 1 \
     --num_workers 4 \
-    --checkpoint_dir checkpoints/staria_xt_2
+    --checkpoint_dir checkpoints/staria_xt_3 \
+    --resume_from_checkpoint checkpoints/staria_xt_3/last.ckpt
